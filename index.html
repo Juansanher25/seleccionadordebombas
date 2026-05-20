@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Módulo Avanzado: Análisis de Sistema y Selección de Bombas</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- MathJax Configuration (Crucial para corregir las fórmulas en medio del texto) -->
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true
+            },
+            svg: {
+                fontCache: 'global'
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; rounded-lg; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .input-field {
+            @apply w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm transition-colors;
+        }
+        .label-text {
+            @apply block text-xs font-semibold text-slate-600 mb-1 uppercase tracking-wider;
+        }
+        .section-card {
+            @apply bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-6;
+        }
+        .mjx-chtml { font-size: 105% !important; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased selection:bg-brand-200">
+
+    <!-- Header -->
+    <header class="bg-brand-900 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <i class="fa-solid fa-water text-2xl text-brand-500"></i>
+                <div>
+                    <h1 class="text-xl font-bold leading-tight">HydraCalc Pro</h1>
+                    <p class="text-xs text-brand-100 opacity-80">Análisis de Sistemas y Selección Dinámica de Bombas</p>
+                </div>
+            </div>
+            <div class="text-sm font-mono bg-brand-800 px-3 py-1 rounded-full border border-brand-700">
+                Módulo v2.2 (Ecuaciones NPSH)
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-8 flex flex-col lg:flex-row gap-8">
+        
+        <!-- COLUMNA IZQUIERDA: ENTRADA DE DATOS -->
+        <div class="w-full lg:w-5/12 xl:w-1/2 space-y-6">
+            
+            <!-- 1. Configuración del Sistema y Fluido -->
+            <div class="section-card">
+                <h2 class="text-lg font-bold text-slate-800 border-b pb-2 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-gears text-brand-600"></i> 1. Condiciones del Sistema
+                </h2>
+                
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="label-text">Tipo de Sistema</label>
+                        <select id="sysType" class="input-field" onchange="toggleSystemType()">
+                            <option value="tank">Tanque a Tanque ($V_A \approx 0, V_B \approx 0$)</option>
+                            <option value="pipe">Tubería a Tubería (Velocidades dinámicas)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label-text">Caudal Máx. ($Q$)</label>
+                        <div class="flex">
+                            <input type="number" id="flowRate" class="input-field rounded-r-none border-r-0" value="150" step="any">
+                            <select id="flowUnit" class="input-field rounded-l-none w-24 bg-slate-100">
+                                <option value="m3h">m³/h</option>
+                                <option value="Lmin">L/min</option>
+                                <option value="gpm">GPM</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div class="md:col-span-2 mb-1">
+                        <label class="label-text flex justify-between">
+                            <span>Propiedades del Fluido</span>
+                            <select id="fluidPreset" class="text-xs bg-transparent text-brand-600 font-bold outline-none cursor-pointer" onchange="applyFluidPreset()">
+                                <option value="custom">Personalizado...</option>
+                                <option value="water20" selected>Agua a 20°C</option>
+                                <option value="water60">Agua a 60°C</option>
+                                <option value="oil">Aceite Ligero</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div>
+                        <label class="label-text">Densidad ($\rho$) [kg/m³]</label>
+                        <input type="number" id="density" class="input-field" value="998">
+                    </div>
+                    <div>
+                        <label class="label-text">Visc. Dinámica ($\mu$) [Pa·s]</label>
+                        <input type="number" id="viscosity" class="input-field" value="0.001" step="any">
+                    </div>
+                    <div>
+                        <label class="label-text">Presión Vapor ($P_v$) [Pa abs]</label>
+                        <input type="number" id="vaporPress" class="input-field" value="2340">
+                    </div>
+                    <div>
+                        <label class="label-text" title="Presión Atmosférica empleada para calcular cargas absolutas en NPSHa">Presión Atm. [Pa abs] <i class="fa-solid fa-circle-info text-blue-500"></i></label>
+                        <input type="number" id="atmPress" class="input-field border-blue-300 bg-blue-50" value="101325">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Estados de Energía (A y B) -->
+            <div class="section-card">
+                <h2 class="text-lg font-bold text-slate-800 border-b pb-2 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-arrows-up-down text-brand-600"></i> 2. Estados Inicial ($A$) y Final ($B$)
+                </h2>
+                
+                <div class="grid grid-cols-2 gap-6">
+                    <!-- Punto A -->
+                    <div class="space-y-3">
+                        <h3 class="font-bold text-sm text-slate-700 bg-slate-100 p-2 rounded text-center">Punto A (Succión)</h3>
+                        <div>
+                            <label class="label-text">Elevación ($Z_A$) [m]</label>
+                            <input type="number" id="za" class="input-field" value="0">
+                        </div>
+                        <div>
+                            <label class="label-text">Presión Manométrica ($P_A$) [Pa]</label>
+                            <input type="number" id="pa" class="input-field" value="0">
+                        </div>
+                    </div>
+                    <!-- Punto B -->
+                    <div class="space-y-3">
+                        <h3 class="font-bold text-sm text-slate-700 bg-slate-100 p-2 rounded text-center">Punto B (Descarga)</h3>
+                        <div>
+                            <label class="label-text">Elevación ($Z_B$) [m]</label>
+                            <input type="number" id="zb" class="input-field" value="15">
+                        </div>
+                        <div>
+                            <label class="label-text">Presión Manométrica ($P_B$) [Pa]</label>
+                            <input type="number" id="pb" class="input-field" value="150000">
+                        </div>
+                    </div>
+                </div>
+                <p class="text-[10px] text-slate-500 mt-3 text-center">* La elevación $Z=0$ se asume en el eje de la bomba para el cálculo de $NPSH_a$.</p>
+            </div>
+
+            <!-- 3. Línea de Succión -->
+            <div class="section-card border-l-4 border-l-blue-500">
+                <h2 class="text-lg font-bold text-slate-800 border-b pb-2 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-pipe text-blue-500"></i> 3. Línea de Succión
+                </h2>
+                
+                <div class="grid grid-cols-3 gap-3 mb-4">
+                    <div class="col-span-3 sm:col-span-1">
+                        <label class="label-text">Material</label>
+                        <select id="sucMaterial" class="input-field"></select>
+                    </div>
+                    <div class="col-span-3 sm:col-span-1">
+                        <label class="label-text">Diámetro Nom.</label>
+                        <select id="sucDiameter" class="input-field"></select>
+                    </div>
+                    <div class="col-span-3 sm:col-span-1">
+                        <label class="label-text">Longitud [m]</label>
+                        <input type="number" id="sucLength" class="input-field" value="5">
+                    </div>
+                </div>
+
+                <!-- Accesorios Succión -->
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="label-text !mb-0">Accesorios (Pérdidas Menores)</label>
+                        <button onclick="addFitting('suc')" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 font-bold transition-colors">
+                            <i class="fa-solid fa-plus"></i> Añadir
+                        </button>
+                    </div>
+                    <div id="sucFittingsContainer" class="space-y-2 max-h-40 overflow-y-auto pr-2">
+                        <!-- Dynamic fittings go here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Línea de Descarga -->
+            <div class="section-card border-l-4 border-l-red-500">
+                <h2 class="text-lg font-bold text-slate-800 border-b pb-2 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-pipe text-red-500"></i> 4. Línea de Descarga
+                </h2>
+                
+                <div class="grid grid-cols-3 gap-3 mb-4">
+                    <div class="col-span-3 sm:col-span-1">
+                        <label class="label-text">Material</label>
+                        <select id="disMaterial" class="input-field"></select>
+                    </div>
+                    <div class="col-span-3 sm:col-span-1">
+                        <label class="label-text">Diámetro Nom.</label>
+                        <select id="disDiameter" class="input-field"></select>
+                    </div>
+                    <div class="col-span-3 sm:col-span-1">
+                        <label class="label-text">Longitud [m]</label>
+                        <input type="number" id="disLength" class="input-field" value="45">
+                    </div>
+                </div>
+
+                <!-- Accesorios Descarga -->
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="label-text !mb-0">Accesorios (Pérdidas Menores)</label>
+                        <button onclick="addFitting('dis')" class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 font-bold transition-colors">
+                            <i class="fa-solid fa-plus"></i> Añadir
+                        </button>
+                    </div>
+                    <div id="disFittingsContainer" class="space-y-2 max-h-40 overflow-y-auto pr-2">
+                        <!-- Dynamic fittings go here -->
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="runEngineeringAnalysis()" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-4 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1 text-lg flex items-center justify-center gap-3">
+                <i class="fa-solid fa-calculator"></i> Calcular y Graficar Sistema
+            </button>
+            
+        </div>
+
+        <!-- COLUMNA DERECHA: RESULTADOS, GRÁFICAS Y SELECCIÓN -->
+        <div class="w-full lg:w-7/12 xl:w-1/2">
+            <div class="sticky top-24 space-y-6">
+                
+                <!-- Panel de Resultados Matemáticos -->
+                <div id="resultsPanel" class="section-card hidden border-t-4 border-t-emerald-500 shadow-lg">
+                    <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center justify-between">
+                        <span><i class="fa-solid fa-square-poll-horizontal text-emerald-600 mr-2"></i> Resultados Hidráulicos</span>
+                        <span id="badgeNPSH" class="text-xs px-2 py-1 rounded-full font-bold"></span>
+                    </h2>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 text-center">
+                            <p class="text-sm text-slate-500 font-semibold mb-1">Carga Total del Sistema ($h_A$)</p>
+                            <p class="text-3xl font-bold text-brand-600"><span id="out_ha">--</span> <span class="text-base text-slate-500">m</span></p>
+                        </div>
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 text-center">
+                            <p class="text-sm text-slate-500 font-semibold mb-1">NPSH Disponible ($NPSH_a$)</p>
+                            <p class="text-3xl font-bold text-emerald-600"><span id="out_npsha">--</span> <span class="text-base text-slate-500">m</span></p>
+                        </div>
+                    </div>
+
+                    <!-- Desglose de Ecuación -->
+                    <div class="bg-slate-900 rounded-lg p-4 text-white overflow-x-auto text-sm mb-4">
+                        <p class="text-slate-400 mb-2 font-mono text-xs">// Ecuación de Bernoulli Aplicada (Paso a paso)</p>
+                        <div id="mathEquation"></div>
+                    </div>
+
+                    <!-- Detalles Tuberías -->
+                    <div class="grid grid-cols-2 gap-4 text-xs">
+                        <div class="p-3 bg-blue-50 rounded border border-blue-100">
+                            <h4 class="font-bold text-blue-800 mb-2 border-b border-blue-200 pb-1">Succión</h4>
+                            <p>Velocidad: <span id="out_v_suc" class="font-mono font-bold">--</span> m/s</p>
+                            <p>Reynolds: <span id="out_re_suc" class="font-mono font-bold">--</span></p>
+                            <p>Factor $f$: <span id="out_f_suc" class="font-mono font-bold">--</span></p>
+                            <p>Pérdidas $h_{Ls}$: <span id="out_hls" class="font-mono text-red-600 font-bold">--</span> m</p>
+                        </div>
+                        <div class="p-3 bg-red-50 rounded border border-red-100">
+                            <h4 class="font-bold text-red-800 mb-2 border-b border-red-200 pb-1">Descarga</h4>
+                            <p>Velocidad: <span id="out_v_dis" class="font-mono font-bold">--</span> m/s</p>
+                            <p>Reynolds: <span id="out_re_dis" class="font-mono font-bold">--</span></p>
+                            <p>Factor $f$: <span id="out_f_dis" class="font-mono font-bold">--</span></p>
+                            <p>Pérdidas $h_{Ld}$: <span id="out_hld" class="font-mono text-red-600 font-bold">--</span> m</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel Gráfico (Nuevo) -->
+                <div id="graphicsPanel" class="section-card hidden border-t-4 border-t-sky-500 shadow-lg">
+                    <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-line text-sky-600"></i> Gráficas Dinámicas
+                    </h2>
+                    
+                    <!-- Diagrama del Sistema (Canvas) -->
+                    <div class="mb-6">
+                        <h3 class="text-xs font-bold text-slate-600 uppercase mb-2">Esquema Físico del Sistema</h3>
+                        <div class="w-full bg-slate-900 rounded-lg overflow-hidden flex justify-center items-center p-2 border border-slate-700">
+                            <canvas id="systemDiagram" width="550" height="250" class="max-w-full"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Curva del Sistema (Chart.js) -->
+                    <div>
+                        <h3 class="text-xs font-bold text-slate-600 uppercase mb-2">Curva del Sistema ($h_A$ vs. $Q$)</h3>
+                        <div class="w-full bg-white rounded-lg p-2 border border-slate-200">
+                            <canvas id="sysCurveChart" height="220"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel de Selección de Bomba -->
+                <div id="pumpSelectionPanel" class="section-card hidden border-t-4 border-t-indigo-500 shadow-lg relative overflow-hidden">
+                    <i class="fa-solid fa-gear absolute -right-10 -top-10 text-[150px] text-slate-50 opacity-50 rotate-12 pointer-events-none"></i>
+                    
+                    <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-ranking-star text-indigo-600"></i> Selección Óptima de Bomba
+                    </h2>
+
+                    <!-- Clasificación General -->
+                    <div class="flex items-center gap-4 bg-indigo-50 p-4 rounded-lg border border-indigo-100 mb-6">
+                        <div class="w-16 h-16 rounded-full bg-white flex items-center justify-center text-indigo-500 text-2xl shadow-sm border border-indigo-200">
+                            <i id="pumpIcon" class="fa-solid fa-fan"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-indigo-500 font-bold uppercase">Tipo Recomendado (Graf. General)</p>
+                            <p id="pumpClass" class="text-lg font-bold text-indigo-900"></p>
+                            <p id="pumpSubclass" class="text-sm text-slate-600"></p>
+                        </div>
+                    </div>
+
+                    <!-- Kinetic Analysis (Ns, Ds) -->
+                    <div id="kineticAnalysis" class="hidden bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6">
+                        <h4 class="text-sm font-bold text-slate-700 mb-3 border-b pb-1">Análisis Cinético (Diseño del Impulsor)</h4>
+                        <div class="flex flex-col sm:flex-row gap-4 items-center">
+                            <div class="flex-1 w-full">
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-slate-500">Velocidad Específica ($N_s$) [US]:</span>
+                                    <span id="out_ns" class="font-bold text-brand-600">--</span>
+                                </div>
+                                <div class="flex justify-between text-xs mb-3">
+                                    <span class="text-slate-500">Diámetro Específico ($D_s$):</span>
+                                    <span id="out_ds" class="font-bold text-brand-600">--</span>
+                                </div>
+                                <div class="relative w-full h-4 bg-gradient-to-r from-blue-300 via-green-300 to-yellow-300 rounded-full overflow-hidden">
+                                    <div id="nsIndicator" class="absolute top-0 bottom-0 w-1 bg-slate-800 shadow-[0_0_4px_rgba(0,0,0,0.5)] transition-all duration-500" style="left: 0%;"></div>
+                                </div>
+                                <div class="flex justify-between text-[9px] text-slate-500 mt-1 font-bold">
+                                    <span>RADIAL (<1000)</span>
+                                    <span>FRANCIS</span>
+                                    <span>MIXTO</span>
+                                    <span>AXIAL (>10000)</span>
+                                </div>
+                            </div>
+                            <div class="w-24 text-center">
+                                <div id="flowTypeVisual" class="text-3xl text-slate-700 mb-1"></div>
+                                <span id="flowTypeLabel" class="text-xs font-bold text-slate-600 bg-white px-2 py-1 rounded shadow-sm border"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Base de datos Simulada: Mejores Opciones -->
+                    <h4 class="text-sm font-bold text-slate-700 mb-3">Opciones en Base de Datos ($B.E.P.$ y $NPSH_r$)</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-600 text-[10px] uppercase tracking-wider">
+                                    <th class="p-2 rounded-tl">Fabricante / Modelo</th>
+                                    <th class="p-2">RPM</th>
+                                    <th class="p-2">Eficiencia Máx</th>
+                                    <th class="p-2">$NPSH_r$</th>
+                                    <th class="p-2 text-center rounded-tr">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dbResults" class="text-sm divide-y divide-slate-100">
+                                <!-- Filas inyectadas por JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Bomba Seleccionada -->
+                    <div class="mt-6 bg-emerald-50 border border-emerald-200 rounded-xl p-5">
+                        <h3 class="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <i class="fa-solid fa-trophy"></i> Selección Principal
+                        </h3>
+                        <div class="flex justify-between items-end">
+                            <div>
+                                <p id="selPumpName" class="text-xl font-bold text-emerald-900 leading-tight">--</p>
+                                <p id="selPumpDesc" class="text-sm text-emerald-700 mt-1">--</p>
+                                <p class="text-xs text-emerald-600 mt-2 font-mono">Punto Op: <span id="selOpPoint"></span></p>
+                            </div>
+                            <a id="selPumpLink" href="#" target="_blank" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-4 rounded transition-colors shadow flex items-center gap-2">
+                                Ficha Técnica <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Overlay de carga -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex-col items-center justify-center z-50">
+        <i class="fa-solid fa-circle-notch fa-spin text-4xl text-white mb-4"></i>
+        <p class="text-white font-bold tracking-widest">ANALIZANDO CURVAS Y CATÁLOGOS...</p>
+    </div>
+
+    <!-- SCRIPT DE LÓGICA DE INGENIERÍA Y UI -->
+    <script>
+        // --- BASE DE DATOS INTERNA: MATERIALES (Rugosidad ε en metros) ---
+        const pipeMaterials = {
+            "Acero Comercial (Ced 40/80)": 0.000045,
+            "Acero Inoxidable": 0.000015,
+            "Hierro Fundido (Nuevo)": 0.00026,
+            "Hierro Fundido (Viejo)": 0.001,
+            "Cobre o Latón (Tubo)": 0.0000015,
+            "PVC / Plástico": 0.0000015,
+            "Concreto (Liso)": 0.0003
+        };
+
+        // --- BASE DE DATOS INTERNA: DIÁMETROS NOMINALES A INTERNOS (m) ---
+        const pipeDiameters = {
+            '1/2"': 0.0158, '3/4"': 0.0209, '1"': 0.0266, '1 1/4"': 0.0351, '1 1/2"': 0.0409,
+            '2"': 0.0525, '2 1/2"': 0.0627, '3"': 0.0779, '4"': 0.1023, '5"': 0.1282,
+            '6"': 0.1541, '8"': 0.2027, '10"': 0.2545, '12"': 0.3048, '16"': 0.3810
+        };
+
+        // --- BASE DE DATOS INTERNA: ACCESORIOS (Valores K) ---
+        const fittingTypes = {
+            "Codo 90° Estándar": 0.75, "Codo 90° Radio Largo": 0.45, "Codo 45° Estándar": 0.4,
+            "Válvula Compuerta (Abierta)": 0.15, "Válvula Compuerta (1/2 abierta)": 4.5,
+            "Válvula Globo (Abierta)": 10.0, "Válvula Retención (Columpio)": 2.0,
+            "Entrada: Borde afilado/cuadrado": 0.5, "Entrada: Ligeramente redondeada": 0.2,
+            "Entrada: Bien redondeada": 0.04, "Entrada: Reentrante (Tubo entra al tanque)": 0.78,
+            "Salida: De tubería a tanque": 1.0, "Té: Flujo directo": 0.4,
+            "Té: Flujo por derivación": 1.5, "Personalizado (Ingresar K)": 'custom'
+        };
+
+        let fittingsLists = { suc: [], dis: [] };
+        let fittingIdCounter = 0;
+        let sysCurveChartObj = null;
+
+        function initApp() {
+            const matSelects = [document.getElementById('sucMaterial'), document.getElementById('disMaterial')];
+            matSelects.forEach(sel => {
+                for (const [name, value] of Object.entries(pipeMaterials)) sel.add(new Option(name, value));
+            });
+
+            const diaSelects = [document.getElementById('sucDiameter'), document.getElementById('disDiameter')];
+            diaSelects.forEach(sel => {
+                for (const [name, val] of Object.entries(pipeDiameters)) {
+                    sel.add(new Option(name + ` (${(val*1000).toFixed(1)} mm)`, val));
+                }
+            });
+            
+            document.getElementById('sucDiameter').value = pipeDiameters['4"'];
+            document.getElementById('disDiameter').value = pipeDiameters['3"'];
+
+            addFittingToState('suc', "Entrada: Borde afilado/cuadrado", 0.5);
+            addFittingToState('dis', "Salida: De tubería a tanque", 1.0);
+            renderFittings('suc');
+            renderFittings('dis');
+        }
+
+        function applyFluidPreset() {
+            const preset = document.getElementById('fluidPreset').value;
+            const rho = document.getElementById('density');
+            const mu = document.getElementById('viscosity');
+            const pv = document.getElementById('vaporPress');
+            if (preset === 'water20') { rho.value = 998; mu.value = 0.0010; pv.value = 2340; }
+            else if (preset === 'water60') { rho.value = 983; mu.value = 0.00046; pv.value = 19940; }
+            else if (preset === 'oil') { rho.value = 850; mu.value = 0.05; pv.value = 100; }
+        }
+
+        function toggleSystemType() { /* Handled internally in physics */ }
+
+        function addFittingToState(line, name, k) {
+            fittingsLists[line].push({ id: fittingIdCounter++, name: name, k: k, qty: 1, isCustom: name === 'Personalizado' });
+        }
+        function addFitting(line) { addFittingToState(line, "Codo 90° Estándar", fittingTypes["Codo 90° Estándar"]); renderFittings(line); }
+        function removeFitting(line, id) { fittingsLists[line] = fittingsLists[line].filter(f => f.id !== id); renderFittings(line); }
+        function updateFitting(line, id, field, value) {
+            const fitting = fittingsLists[line].find(f => f.id === id);
+            if(fitting) {
+                if(field === 'type') {
+                    if(value === 'custom') { fitting.name = 'Personalizado'; fitting.isCustom = true; fitting.k = 1.0; } 
+                    else { fitting.name = value; fitting.isCustom = false; fitting.k = fittingTypes[value]; }
+                } 
+                else if(field === 'k') fitting.k = parseFloat(value) || 0;
+                else if(field === 'qty') fitting.qty = parseInt(value) || 1;
+                renderFittings(line);
+            }
+        }
+
+        function renderFittings(line) {
+            const container = document.getElementById(`${line}FittingsContainer`);
+            container.innerHTML = '';
+            if(fittingsLists[line].length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 italic">No hay accesorios definidos.</p>'; return; }
+            fittingsLists[line].forEach(f => {
+                let selectHtml = `<select class="w-full text-xs p-1 border rounded" onchange="updateFitting('${line}', ${f.id}, 'type', this.value)">`;
+                for (const [name, kVal] of Object.entries(fittingTypes)) {
+                    let selected = (f.name === name) || (f.isCustom && kVal === 'custom') ? 'selected' : '';
+                    selectHtml += `<option value="${name === 'Personalizado' ? 'custom' : name}" ${selected}>${name}</option>`;
+                }
+                selectHtml += `</select>`;
+                let kInputHtml = f.isCustom 
+                    ? `<input type="number" step="0.1" value="${f.k}" class="w-16 text-xs p-1 border rounded" onchange="updateFitting('${line}', ${f.id}, 'k', this.value)" placeholder="K">`
+                    : `<span class="text-xs text-slate-500 font-mono w-16 inline-block text-right">K=${f.k}</span>`;
+                container.innerHTML += `
+                    <div class="flex items-center gap-2 bg-white p-1 rounded border shadow-sm">
+                        <div class="flex-grow">${selectHtml}</div>${kInputHtml}
+                        <input type="number" min="1" value="${f.qty}" class="w-12 text-xs p-1 border rounded text-center" onchange="updateFitting('${line}', ${f.id}, 'qty', this.value)" title="Cantidad">
+                        <button onclick="removeFitting('${line}', ${f.id})" class="text-red-500 hover:text-red-700 px-2"><i class="fa-solid fa-times"></i></button>
+                    </div>`;
+            });
+        }
+
+        // --- FÍSICA ---
+        const g = 9.81;
+
+        function calcFrictionFactor(Re, epsilon, D) {
+            if (Re < 2300) return 64 / Re;
+            const term1 = epsilon / (3.7 * D);
+            const term2 = 5.74 / Math.pow(Re, 0.9);
+            return 0.25 / Math.pow(Math.log10(term1 + term2), 2);
+        }
+
+        function calculateLine(Q_m3s, rho, mu, D, L, epsilon, fittings) {
+            if(Q_m3s <= 0) return { A: (Math.PI*D*D)/4, V: 0, Re: 0, f: 0, sumK: 0, velHead: 0, hl_primary: 0, hl_secondary: 0, hl_total: 0 };
+            const A = (Math.PI * Math.pow(D, 2)) / 4;
+            const V = Q_m3s / A;
+            const Re = (rho * V * D) / mu;
+            const f = calcFrictionFactor(Re, epsilon, D);
+            let sumK = 0;
+            fittings.forEach(fit => { sumK += (fit.k * fit.qty); });
+            const velHead = Math.pow(V, 2) / (2 * g);
+            const hl_primary = f * (L / D) * velHead;
+            const hl_secondary = sumK * velHead;
+            return { A, V, Re, f, sumK, velHead, hl_primary, hl_secondary, hl_total: hl_primary + hl_secondary };
+        }
+
+        // Función encapsulada para barrido de caudales en la gráfica
+        function getSystemHeadForQ(q_m3s, sysType, rho, mu, Ds, Ls, eps_s, fit_s, Dd, Ld, eps_d, fit_d, Za, Zb, Pa, Pb) {
+            const gamma = rho * g;
+            const deltaZ = Zb - Za;
+            const deltaP_gamma = (Pb - Pa) / gamma;
+            
+            if (q_m3s === 0) return deltaZ + deltaP_gamma; // Cabeza estática
+
+            const suc = calculateLine(q_m3s, rho, mu, Ds, Ls, eps_s, fit_s);
+            const dis = calculateLine(q_m3s, rho, mu, Dd, Ld, eps_d, fit_d);
+            
+            let Va = 0, Vb = 0;
+            if (sysType === 'pipe') { Va = suc.V; Vb = dis.V; }
+            
+            const deltaV_2g = (Math.pow(Vb, 2) - Math.pow(Va, 2)) / (2 * g);
+            return deltaZ + deltaP_gamma + deltaV_2g + suc.hl_total + dis.hl_total;
+        }
+
+        async function runEngineeringAnalysis() {
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.style.display = 'flex';
+            await new Promise(r => setTimeout(r, 600));
+
+            try {
+                const sysType = document.getElementById('sysType').value;
+                const flowInput = parseFloat(document.getElementById('flowRate').value);
+                const flowUnit = document.getElementById('flowUnit').value;
+                
+                let Q = flowInput;
+                if(flowUnit === 'm3h') Q = Q / 3600;
+                if(flowUnit === 'Lmin') Q = Q / 60000;
+                if(flowUnit === 'gpm') Q = Q * 0.0000630902;
+                
+                const Q_gpm = Q * 15850.32; 
+
+                const rho = parseFloat(document.getElementById('density').value);
+                const mu = parseFloat(document.getElementById('viscosity').value);
+                const Pv = parseFloat(document.getElementById('vaporPress').value);
+                const Patm = parseFloat(document.getElementById('atmPress').value);
+                const gamma = rho * g;
+
+                const Za = parseFloat(document.getElementById('za').value);
+                const Pa = parseFloat(document.getElementById('pa').value);
+                const Zb = parseFloat(document.getElementById('zb').value);
+                const Pb = parseFloat(document.getElementById('pb').value);
+
+                const Ds = parseFloat(document.getElementById('sucDiameter').value);
+                const Ls = parseFloat(document.getElementById('sucLength').value);
+                const eps_s = parseFloat(document.getElementById('sucMaterial').value);
+
+                const Dd = parseFloat(document.getElementById('disDiameter').value);
+                const Ld = parseFloat(document.getElementById('disLength').value);
+                const eps_d = parseFloat(document.getElementById('disMaterial').value);
+
+                // Cálculos Punto de Diseño
+                const sucRes = calculateLine(Q, rho, mu, Ds, Ls, eps_s, fittingsLists.suc);
+                const disRes = calculateLine(Q, rho, mu, Dd, Ld, eps_d, fittingsLists.dis);
+
+                let Va = 0, Vb = 0;
+                if (sysType === 'pipe') { Va = sucRes.V; Vb = disRes.V; }
+
+                const deltaZ = Zb - Za;
+                const deltaP_gamma = (Pb - Pa) / gamma;
+                const deltaV_2g = (Math.pow(Vb, 2) - Math.pow(Va, 2)) / (2 * g);
+                const hl_total_sys = sucRes.hl_total + disRes.hl_total;
+
+                const hA = deltaZ + deltaP_gamma + deltaV_2g + hl_total_sys;
+                const P_suction_abs = Patm + Pa;
+                const npsha = (P_suction_abs / gamma) + Za - sucRes.hl_total - (Pv / gamma);
+
+                // --- Render HTML ---
+                document.getElementById('out_ha').innerText = hA.toFixed(2);
+                document.getElementById('out_npsha').innerText = npsha.toFixed(2);
+                
+                const badge = document.getElementById('badgeNPSH');
+                if(npsha < 2) {
+                    badge.className = "text-xs px-2 py-1 rounded-full font-bold bg-red-100 text-red-700 border border-red-300";
+                    badge.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Riesgo Cavitación ($NPSH_a$ bajo)';
+                } else {
+                    badge.className = "text-xs px-2 py-1 rounded-full font-bold bg-emerald-100 text-emerald-700 border border-emerald-300";
+                    badge.innerHTML = '<i class="fa-solid fa-check-circle"></i> $NPSH_a$ Seguro';
+                }
+
+                document.getElementById('out_v_suc').innerText = sucRes.V.toFixed(2);
+                document.getElementById('out_re_suc').innerText = sucRes.Re.toExponential(2);
+                document.getElementById('out_f_suc').innerText = sucRes.f.toFixed(4);
+                document.getElementById('out_hls').innerText = sucRes.hl_total.toFixed(2);
+
+                document.getElementById('out_v_dis').innerText = disRes.V.toFixed(2);
+                document.getElementById('out_re_dis').innerText = disRes.Re.toExponential(2);
+                document.getElementById('out_f_dis').innerText = disRes.f.toFixed(4);
+                document.getElementById('out_hld').innerText = disRes.hl_total.toFixed(2);
+
+                // Render MathJax (AHORA INCLUYE EXPLICACIÓN DETALLADA DEL NPSHa)
+                const mathDiv = document.getElementById('mathEquation');
+                mathDiv.innerHTML = `
+                    <div class="mb-3 text-emerald-400 font-bold border-b border-slate-700 pb-1">1. Carga Total del Sistema ($h_A$)</div>
+                    $$h_A = (Z_B - Z_A) + \\frac{P_B - P_A}{\\gamma} + \\frac{V_B^2 - V_A^2}{2g} + h_{L_s} + h_{L_d}$$
+                    $$h_A = (${Zb} - ${Za}) + ${deltaP_gamma.toFixed(2)} + ${deltaV_2g.toFixed(2)} + ${sucRes.hl_total.toFixed(2)} + ${disRes.hl_total.toFixed(2)} = ${hA.toFixed(2)} \\text{ m}$$
+                    
+                    <div class="mt-4 mb-3 text-blue-400 font-bold border-b border-slate-700 pb-1">2. Carga Neta Positiva de Succión ($NPSH_a$)</div>
+                    $$NPSH_a = \\frac{P_{atm} + P_A - P_v}{\\gamma} + Z_A - h_{L_s}$$
+                    $$NPSH_a = \\frac{${Patm} + ${Pa} - ${Pv}}{${gamma.toFixed(2)}} + ${Za} - ${sucRes.hl_total.toFixed(2)} = ${npsha.toFixed(2)} \\text{ m}$$
+                `;
+                MathJax.typesetPromise(); // Fuerza renderizado general en la página
+
+                // Mostrar Paneles
+                document.getElementById('resultsPanel').classList.remove('hidden');
+                document.getElementById('graphicsPanel').classList.remove('hidden');
+
+                // --- DIBUJAR GRÁFICAS Y ESQUEMAS ---
+                drawSystemDiagram(sysType, Za, Zb, Pa, Pb);
+                generateSystemCurve(Q, flowUnit, sysType, rho, mu, Ds, Ls, eps_s, fittingsLists.suc, Dd, Ld, eps_d, fittingsLists.dis, Za, Zb, Pa, Pb);
+
+                // --- SELECCIÓN DE BOMBA ---
+                selectPump(Q_gpm, hA * 3.28084, npsha); 
+
+            } catch (error) {
+                console.error(error);
+                alert("Error en el cálculo. Revise los datos de entrada.");
+            } finally {
+                overlay.style.display = 'none';
+            }
+        }
+
+        // --- GRÁFICA: ESQUEMA DEL SISTEMA (CANVAS) ---
+        function drawSystemDiagram(sysType, Za, Zb, Pa, Pb) {
+            const canvas = document.getElementById('systemDiagram');
+            const ctx = canvas.getContext('2d');
+            const W = canvas.width;
+            const H = canvas.height;
+            
+            ctx.clearRect(0, 0, W, H);
+
+            // Coordenadas de la Bomba (Centro)
+            const pX = W / 2;
+            const pY = H / 2 + 20;
+
+            // Escala para Z
+            const maxZ = Math.max(Math.abs(Za), Math.abs(Zb), 5); // min 5m para escala
+            const scaleY = (H / 2 - 30) / maxZ;
+
+            const tA_X = 60;
+            const tA_Y = pY - (Za * scaleY);
+            const tB_X = W - 60;
+            const tB_Y = pY - (Zb * scaleY);
+
+            // Dibujar Tubería Succión
+            ctx.beginPath();
+            ctx.moveTo(tA_X, tA_Y);
+            ctx.lineTo(tA_X, pY);
+            ctx.lineTo(pX, pY);
+            ctx.strokeStyle = '#3b82f6'; // blue
+            ctx.lineWidth = 6;
+            ctx.stroke();
+
+            // Dibujar Tubería Descarga
+            ctx.beginPath();
+            ctx.moveTo(pX, pY);
+            ctx.lineTo(tB_X, pY);
+            ctx.lineTo(tB_X, tB_Y);
+            ctx.strokeStyle = '#ef4444'; // red
+            ctx.stroke();
+
+            // Dibujar Tanques o Nodos
+            if (sysType === 'tank') {
+                // Tanque Succión
+                ctx.fillStyle = 'rgba(59, 130, 246, 0.5)';
+                ctx.fillRect(tA_X - 30, tA_Y, 60, pY - tA_Y + 10);
+                ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2;
+                ctx.strokeRect(tA_X - 30, tA_Y - 20, 60, pY - tA_Y + 30);
+                
+                // Tanque Descarga
+                ctx.fillStyle = 'rgba(239, 68, 68, 0.5)';
+                ctx.fillRect(tB_X - 30, tB_Y, 60, pY - tB_Y + 10);
+                ctx.strokeStyle = '#94a3b8'; ctx.strokeRect(tB_X - 30, tB_Y - 20, 60, pY - tB_Y + 30);
+            } else {
+                // Nodos tubería
+                ctx.fillStyle = '#cbd5e1';
+                ctx.beginPath(); ctx.arc(tA_X, tA_Y, 15, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(tB_X, tB_Y, 15, 0, Math.PI*2); ctx.fill();
+            }
+
+            // Dibujar Bomba
+            ctx.fillStyle = '#0f172a';
+            ctx.beginPath();
+            ctx.arc(pX, pY, 20, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.moveTo(pX-10, pY+10); ctx.lineTo(pX+10, pY+10); ctx.lineTo(pX, pY-12); ctx.fill(); // Impulsor
+
+            // Etiquetas Textuales
+            ctx.fillStyle = '#fff';
+            ctx.font = '10px JetBrains Mono';
+            ctx.textAlign = 'center';
+            ctx.fillText(`Za = ${Za}m`, tA_X, tA_Y - 30);
+            ctx.fillText(`Pa = ${(Pa/1000).toFixed(1)}kPa`, tA_X, tA_Y - 45);
+
+            ctx.fillText(`Zb = ${Zb}m`, tB_X, tB_Y - 30);
+            ctx.fillText(`Pb = ${(Pb/1000).toFixed(1)}kPa`, tB_X, tB_Y - 45);
+
+            ctx.fillText("BOMBA (Z=0)", pX, pY + 35);
+        }
+
+        // --- GRÁFICA: CURVA DEL SISTEMA (CHART.JS) ---
+        function generateSystemCurve(Q_design, flowUnit, sysType, rho, mu, Ds, Ls, eps_s, fit_s, Dd, Ld, eps_d, fit_d, Za, Zb, Pa, Pb) {
+            let dataPoints = [];
+            let qLabels = [];
+            
+            // Generar 20 puntos desde Q=0 hasta Q = 1.5 * Q_design
+            let max_Q = Q_design * 1.5;
+            let step = max_Q / 20;
+
+            for(let i=0; i<=20; i++) {
+                let q_iter = i * step;
+                let h_iter = getSystemHeadForQ(q_iter, sysType, rho, mu, Ds, Ls, eps_s, fit_s, Dd, Ld, eps_d, fit_d, Za, Zb, Pa, Pb);
+                
+                // Convertir Q a unidad del usuario para el Label
+                let q_disp = q_iter;
+                if(flowUnit === 'm3h') q_disp = q_disp * 3600;
+                else if(flowUnit === 'Lmin') q_disp = q_disp * 60000;
+                else if(flowUnit === 'gpm') q_disp = q_disp / 0.0000630902;
+
+                qLabels.push(q_disp.toFixed(1));
+                dataPoints.push({x: q_disp, y: h_iter});
+            }
+
+            // Punto de Operación
+            let q_op = Q_design;
+            if(flowUnit === 'm3h') q_op *= 3600;
+            else if(flowUnit === 'Lmin') q_op *= 60000;
+            else if(flowUnit === 'gpm') q_op /= 0.0000630902;
+            let h_op = getSystemHeadForQ(Q_design, sysType, rho, mu, Ds, Ls, eps_s, fit_s, Dd, Ld, eps_d, fit_d, Za, Zb, Pa, Pb);
+
+            if (sysCurveChartObj) { sysCurveChartObj.destroy(); }
+
+            const ctx = document.getElementById('sysCurveChart').getContext('2d');
+            sysCurveChartObj = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: qLabels,
+                    datasets: [
+                        {
+                            label: 'Curva del Sistema (hA)',
+                            data: dataPoints,
+                            borderColor: '#0284c7', // brand-600
+                            backgroundColor: 'rgba(2, 132, 199, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Punto de Operación (Diseño)',
+                            data: [{x: q_op, y: h_op}],
+                            backgroundColor: '#ef4444',
+                            borderColor: '#b91c1c',
+                            borderWidth: 2,
+                            pointRadius: 6,
+                            pointHoverRadius: 8,
+                            type: 'scatter'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: { 
+                            type: 'linear',
+                            title: { display: true, text: `Caudal (${flowUnit})`, font: {weight: 'bold'} }
+                        },
+                        y: {
+                            title: { display: true, text: 'Carga Total hA (m)', font: {weight: 'bold'} },
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) { return ` ${ctx.raw.y.toFixed(2)} m @ ${ctx.raw.x.toFixed(1)} ${flowUnit}`; }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+
+        // --- ALGORITMO DE SELECCIÓN Y BÚSQUEDA ---
+        function selectPump(Q_gpm, H_ft, npsha_m) {
+            const h_m = H_ft / 3.28084;
+            let type = "Centrífuga", subtype = "Radialmente Partida (1750 o 3500 rpm)", icon = "fa-fan", isKinetic = true;
+
+            if (H_ft > 1500 && Q_gpm < 200) { type = "Desplazamiento Positivo"; subtype = "Reciprocante (Pistón/Émbolo)"; icon = "fa-cogs"; isKinetic = false; } 
+            else if (H_ft > 300 && Q_gpm < 50) { type = "Desplazamiento Positivo"; subtype = "Rotatoria (Engranajes/Tornillo)"; icon = "fa-gear"; isKinetic = false; } 
+            else if (H_ft < 50 && Q_gpm > 5000) { type = "Cinética"; subtype = "Flujo Axial (Hélice)"; icon = "fa-dharmachakra"; } 
+            else if (Q_gpm > 2000 && H_ft < 200) { type = "Cinética"; subtype = "Flujo Mixto"; icon = "fa-hurricane"; }
+
+            document.getElementById('pumpClass').innerText = type;
+            document.getElementById('pumpSubclass').innerText = subtype;
+            document.getElementById('pumpIcon').className = `fa-solid ${icon}`;
+
+            const kineticPanel = document.getElementById('kineticAnalysis');
+            if (isKinetic) {
+                kineticPanel.classList.remove('hidden');
+                const N_rpm = (H_ft > 300) ? 3500 : 1750;
+                const Ns = (N_rpm * Math.sqrt(Q_gpm)) / Math.pow(H_ft, 0.75);
+                document.getElementById('out_ns').innerText = Math.round(Ns) + " @ " + N_rpm + " rpm";
+                
+                const D_inch = (1300 * Math.sqrt(H_ft)) / N_rpm; 
+                const Ds = (D_inch * Math.pow(H_ft, 0.25)) / Math.sqrt(Q_gpm);
+                document.getElementById('out_ds').innerText = Ds.toFixed(2);
+
+                let flowType = "", visualIcon = "", indicatorPercent = 0;
+                if(Ns < 1000) { flowType = "RADIAL"; visualIcon = "↑→"; indicatorPercent = 10; }
+                else if(Ns < 3000) { flowType = "RADIAL / FRANCIS"; visualIcon = "↗"; indicatorPercent = 35; }
+                else if(Ns < 6000) { flowType = "FLUJO MIXTO"; visualIcon = "↗→"; indicatorPercent = 65; }
+                else { flowType = "AXIAL"; visualIcon = "→"; indicatorPercent = 90; }
+
+                document.getElementById('nsIndicator').style.left = `${indicatorPercent}%`;
+                document.getElementById('flowTypeLabel').innerText = flowType;
+                document.getElementById('flowTypeVisual').innerText = visualIcon;
+            } else {
+                kineticPanel.classList.add('hidden');
+            }
+
+            generateMockDatabaseResults(Q_gpm, h_m, npsha_m, isKinetic);
+            document.getElementById('pumpSelectionPanel').classList.remove('hidden');
+        }
+
+        function generateMockDatabaseResults(Q_gpm, H_m, npsha_m, isKinetic) {
+            const tbody = document.getElementById('dbResults');
+            tbody.innerHTML = '';
+            let dbPumps = [];
+            const brands = ["Goulds Pumps", "Flowserve", "KSB", "Sulzer", "Grundfos"];
+            const models = ["3196 (ANSI)", "Mark 3", "Etanorm", "AHLSTAR", "NKG"];
+            
+            for(let i=0; i<5; i++) {
+                let bep = Math.floor(Math.random() * 20) + 65; 
+                let baseNpshr = 1.5 + (Q_gpm/1000); 
+                let npshr = baseNpshr + (Math.random() * 2 - 1); 
+                dbPumps.push({ brand: brands[i], model: models[i] + (isKinetic ? "" : " (PDP)"), rpm: (Math.random() > 0.5 ? 1750 : 3500), bep: bep, npshr: npshr > 0 ? npshr : 1.0, id: i });
+            }
+
+            let validPumps = dbPumps.filter(p => p.npshr < (npsha_m - 0.5)); 
+            if(validPumps.length === 0) validPumps = dbPumps.sort((a,b) => a.npshr - b.npshr).slice(0,2);
+            validPumps.sort((a, b) => b.bep - a.bep);
+
+            if(validPumps.length > 1 && validPumps[0].bep === validPumps[1].bep) {
+                if(validPumps[1].npshr < validPumps[0].npshr) {
+                    let temp = validPumps[0]; validPumps[0] = validPumps[1]; validPumps[1] = temp;
+                }
+            }
+
+            dbPumps.sort((a, b) => b.bep - a.bep).forEach((pump) => {
+                const isSelected = (pump.id === validPumps[0].id);
+                const npshWarn = pump.npshr >= npsha_m ? '<i class="fa-solid fa-triangle-exclamation text-red-500" title="Riesgo de Cavitación"></i>' : '';
+                let trClass = isSelected ? "bg-emerald-50 border-l-4 border-l-emerald-500" : "hover:bg-slate-50";
+                
+                tbody.innerHTML += `
+                    <tr class="${trClass} transition-colors">
+                        <td class="p-2 py-3"><div class="font-bold text-slate-800">${pump.brand}</div><div class="text-xs text-slate-500">${pump.model}</div></td>
+                        <td class="p-2 text-slate-600">${pump.rpm}</td>
+                        <td class="p-2"><div class="flex items-center gap-2"><div class="w-16 bg-slate-200 rounded-full h-1.5"><div class="bg-brand-500 h-1.5 rounded-full" style="width: ${pump.bep}%"></div></div><span class="font-bold ${isSelected ? 'text-emerald-700' : 'text-slate-700'}">${pump.bep}%</span></div></td>
+                        <td class="p-2 font-mono ${pump.npshr >= npsha_m ? 'text-red-600 font-bold' : 'text-slate-600'}">${pump.npshr.toFixed(1)}m ${npshWarn}</td>
+                        <td class="p-2 text-center">${isSelected ? '<span class="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-1 rounded">ÓPTIMA</span>' : '<span class="text-slate-300 text-xs">-</span>'}</td>
+                    </tr>`;
+            });
+
+            const best = validPumps[0];
+            document.getElementById('selPumpName').innerText = `${best.brand} - Serie ${best.model}`;
+            document.getElementById('selPumpDesc').innerText = `Motor acoplado a ${best.rpm} RPM. Eficiencia estimada del ${best.bep}% en el B.E.P.`;
+            document.getElementById('selOpPoint').innerText = `Q = ${document.getElementById('flowRate').value} ${document.getElementById('flowUnit').value}, H = ${H_m.toFixed(2)} m. (NPSHr: ${best.npshr.toFixed(2)}m)`;
+            document.getElementById('selPumpLink').href = `https://www.google.com/search?q=curva+bomba+${encodeURIComponent(best.brand)}+${encodeURIComponent(best.model)}`;
+        }
+
+        window.onload = initApp;
+
+    </script>
+</body>
+</html>
