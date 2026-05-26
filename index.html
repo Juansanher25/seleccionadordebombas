@@ -258,8 +258,8 @@
                 </div>
             </div>
 
-            <button onclick="runEngineeringAnalysis()" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-4 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1 text-lg flex items-center justify-center gap-3">
-                <i class="fa-solid fa-calculator"></i> Calcular y Graficar Sistema
+            <button onclick="runEngineeringAnalysis()" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-4 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1 text-lg flex items-center justify-center gap-3 transition-all duration-300">
+                <span id="calcButtonText" class="flex items-center gap-3"><i class="fa-solid fa-calculator"></i> Calcular y Graficar Sistema</span>
             </button>
             
         </div>
@@ -506,6 +506,7 @@
         let fittingsLists = { suc: [], dis: [] };
         let fittingIdCounter = 0;
         let sysCurveChartObj = null;
+        let lastInputsCache = null; // Caching del estado de los inputs
 
         function initApp() {
             const matSelects = [document.getElementById('sucMaterial'), document.getElementById('disMaterial')];
@@ -681,6 +682,51 @@
         }
 
         async function runEngineeringAnalysis() {
+            // Construcción del estado actual para validar si hubo cambios
+            const currentState = JSON.stringify({
+                sysType: document.getElementById('sysType').value,
+                flowRate: document.getElementById('flowRate').value,
+                flowUnit: document.getElementById('flowUnit').value,
+                rho: document.getElementById('density').value,
+                mu: document.getElementById('viscosity').value,
+                pv: document.getElementById('vaporPress').value,
+                patm: document.getElementById('atmPress').value,
+                za: document.getElementById('za').value,
+                pa: document.getElementById('pa').value,
+                zb: document.getElementById('zb').value,
+                pb: document.getElementById('pb').value,
+                sucMat: document.getElementById('sucMaterial').value,
+                sucDia: document.getElementById('sucDiameter').value,
+                sucLen: document.getElementById('sucLength').value,
+                sucFit: fittingsLists.suc,
+                disMat: document.getElementById('disMaterial').value,
+                disDia: document.getElementById('disDiameter').value,
+                disLen: document.getElementById('disLength').value,
+                disFit: fittingsLists.dis
+            });
+
+            // Si el estado no ha cambiado, omitir el recálculo
+            if (lastInputsCache === currentState) {
+                const btn = document.querySelector('button[onclick="runEngineeringAnalysis()"]');
+                const btnText = document.getElementById('calcButtonText');
+                
+                // Feedback visual breve indicando que ya está al día
+                btn.classList.replace('bg-brand-600', 'bg-emerald-600');
+                btn.classList.replace('hover:bg-brand-700', 'hover:bg-emerald-700');
+                btnText.innerHTML = '<i class="fa-solid fa-check text-emerald-100"></i> Resultados al Día';
+                
+                setTimeout(() => {
+                    btn.classList.replace('bg-emerald-600', 'bg-brand-600');
+                    btn.classList.replace('hover:bg-emerald-700', 'hover:bg-brand-700');
+                    btnText.innerHTML = '<i class="fa-solid fa-calculator"></i> Calcular y Graficar Sistema';
+                }, 1500);
+                
+                return; // Evita correr la simulación nuevamente
+            }
+
+            // Actualizar caché al nuevo estado
+            lastInputsCache = currentState;
+
             const overlay = document.getElementById('loadingOverlay');
             overlay.style.display = 'flex';
             await new Promise(r => setTimeout(r, 600));
