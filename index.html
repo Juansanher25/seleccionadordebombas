@@ -85,7 +85,7 @@
                 </div>
             </div>
             <div class="text-sm font-mono bg-brand-800 px-3 py-1 rounded-full border border-brand-700">
-                Módulo v2.3 (Determinista)
+                Módulo v2.4 (Le/D + fT)
             </div>
         </div>
     </header>
@@ -212,7 +212,7 @@
                 <!-- Accesorios Succión -->
                 <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
                     <div class="flex justify-between items-center mb-2">
-                        <label class="label-text !mb-0">Accesorios (Pérdidas Menores)</label>
+                        <label class="label-text !mb-0">Accesorios <span class="text-blue-500 normal-case ml-1" title="K = fT * (Le/D)"><i class="fa-solid fa-info-circle"></i> K dinámico</span></label>
                         <button onclick="addFitting('suc')" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 font-bold transition-colors">
                             <i class="fa-solid fa-plus"></i> Añadir
                         </button>
@@ -247,7 +247,7 @@
                 <!-- Accesorios Descarga -->
                 <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
                     <div class="flex justify-between items-center mb-2">
-                        <label class="label-text !mb-0">Accesorios (Pérdidas Menores)</label>
+                        <label class="label-text !mb-0">Accesorios <span class="text-red-500 normal-case ml-1" title="K = fT * (Le/D)"><i class="fa-solid fa-info-circle"></i> K dinámico</span></label>
                         <button onclick="addFitting('dis')" class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 font-bold transition-colors">
                             <i class="fa-solid fa-plus"></i> Añadir
                         </button>
@@ -298,14 +298,16 @@
                             <h4 class="font-bold text-blue-800 mb-2 border-b border-blue-200 pb-1">Succión</h4>
                             <p>Velocidad: <span id="out_v_suc" class="font-mono font-bold">--</span> m/s</p>
                             <p>Reynolds: <span id="out_re_suc" class="font-mono font-bold">--</span></p>
-                            <p>Factor $f$: <span id="out_f_suc" class="font-mono font-bold">--</span></p>
+                            <p title="Factor de fricción para cálculo principal">Factor $f$: <span id="out_f_suc" class="font-mono font-bold">--</span></p>
+                            <p title="Factor de turbulencia para cálculo de Le/D de accesorios">Factor $f_T$: <span id="out_ft_suc" class="font-mono font-bold">--</span></p>
                             <p>Pérdidas $h_{Ls}$: <span id="out_hls" class="font-mono text-red-600 font-bold">--</span> m</p>
                         </div>
                         <div class="p-3 bg-red-50 rounded border border-red-100">
                             <h4 class="font-bold text-red-800 mb-2 border-b border-red-200 pb-1">Descarga</h4>
                             <p>Velocidad: <span id="out_v_dis" class="font-mono font-bold">--</span> m/s</p>
                             <p>Reynolds: <span id="out_re_dis" class="font-mono font-bold">--</span></p>
-                            <p>Factor $f$: <span id="out_f_dis" class="font-mono font-bold">--</span></p>
+                            <p title="Factor de fricción para cálculo principal">Factor $f$: <span id="out_f_dis" class="font-mono font-bold">--</span></p>
+                            <p title="Factor de turbulencia para cálculo de Le/D de accesorios">Factor $f_T$: <span id="out_ft_dis" class="font-mono font-bold">--</span></p>
                             <p>Pérdidas $h_{Ld}$: <span id="out_hld" class="font-mono text-red-600 font-bold">--</span> m</p>
                         </div>
                     </div>
@@ -456,15 +458,49 @@
             '6"': 0.1541, '8"': 0.2027, '10"': 0.2545, '12"': 0.3048, '16"': 0.3810
         };
 
-        // --- BASE DE DATOS INTERNA: ACCESORIOS (Valores K) ---
+        // --- BASE DE DATOS INTERNA: ACCESORIOS (Valores Le/D y K puros) ---
+        // 'LeD' significa que el valor proporcionado es Le/D y se multiplicará por el fT
+        // 'K' significa que es el coeficiente de pérdida directo
         const fittingTypes = {
-            "Codo 90° Estándar": 0.75, "Codo 90° Radio Largo": 0.45, "Codo 45° Estándar": 0.4,
-            "Válvula Compuerta (Abierta)": 0.15, "Válvula Compuerta (1/2 abierta)": 4.5,
-            "Válvula Globo (Abierta)": 10.0, "Válvula Retención (Columpio)": 2.0,
-            "Entrada: Borde afilado/cuadrado": 0.5, "Entrada: Ligeramente redondeada": 0.2,
-            "Entrada: Bien redondeada": 0.04, "Entrada: Reentrante (Tubo entra al tanque)": 0.78,
-            "Salida: De tubería a tanque": 1.0, "Té: Flujo directo": 0.4,
-            "Té: Flujo por derivación": 1.5, "Personalizado (Ingresar K)": 'custom'
+            // Válvulas de Compuerta
+            "Válv. Compuerta - Abierta por completo": { type: 'LeD', value: 8 },
+            "Válv. Compuerta - Abierta 3/4": { type: 'LeD', value: 35 },
+            "Válv. Compuerta - Abierta 1/2": { type: 'LeD', value: 160 },
+            "Válv. Compuerta - Abierta 1/4": { type: 'LeD', value: 900 },
+            // Válvulas Globo
+            "Válv. Globo - Abierta por completo (Estándar)": { type: 'LeD', value: 340 },
+            "Válv. Globo - Abierta (Tipo Y/Ángulo 45°)": { type: 'LeD', value: 55 },
+            // Válvulas de Ángulo y Bola
+            "Válv. de Ángulo - Abierta (Estándar 90°)": { type: 'LeD', value: 150 },
+            "Válv. de Bola - Abierta (Paso total)": { type: 'LeD', value: 3 },
+            "Válv. de Bola - Abierta (Paso reducido)": { type: 'LeD', value: 15 },
+            // Válvulas de Mariposa
+            "Válv. Mariposa - Abierta (2\" a 8\")": { type: 'LeD', value: 45 },
+            "Válv. Mariposa - Abierta (10\" a 14\")": { type: 'LeD', value: 35 },
+            "Válv. Mariposa - Abierta (16\" a 24\")": { type: 'LeD', value: 25 },
+            // Válvulas de Retención
+            "Válv. Retención - Giratoria (Swing)": { type: 'LeD', value: 100 },
+            "Válv. Retención - Elevación (Lift)": { type: 'LeD', value: 600 },
+            "Válv. Retención - Bola (Ball)": { type: 'LeD', value: 150 },
+            // Válvulas de Pie
+            "Válv. Pie - Filtro (Disco de vástago)": { type: 'LeD', value: 420 },
+            "Válv. Pie - Filtro (Disco de bisagra)": { type: 'LeD', value: 75 },
+            // Codos
+            "Codo 90° - Estándar (Roscado)": { type: 'LeD', value: 50 },
+            "Codo 90° - Estándar (Bridado)": { type: 'LeD', value: 30 },
+            "Codo 90° - Radio Largo (Bridado)": { type: 'LeD', value: 20 },
+            "Codo 45° - Estándar": { type: 'LeD', value: 16 },
+            // Tés
+            "Té - Flujo directo": { type: 'LeD', value: 20 },
+            "Té - Flujo por derivación": { type: 'LeD', value: 60 },
+            // Entradas / Salidas (Valores fijos de K)
+            "Entrada: Borde afilado/cuadrado": { type: 'K', value: 0.5 },
+            "Entrada: Ligeramente redondeada": { type: 'K', value: 0.2 },
+            "Entrada: Bien redondeada": { type: 'K', value: 0.04 },
+            "Entrada: Reentrante": { type: 'K', value: 0.78 },
+            "Salida: De tubería a tanque": { type: 'K', value: 1.0 },
+            // Personalizado
+            "Personalizado (Ingresar K)": { type: 'custom', value: 1.0 }
         };
 
         let fittingsLists = { suc: [], dis: [] };
@@ -475,6 +511,8 @@
             const matSelects = [document.getElementById('sucMaterial'), document.getElementById('disMaterial')];
             matSelects.forEach(sel => {
                 for (const [name, value] of Object.entries(pipeMaterials)) sel.add(new Option(name, value));
+                // Add event listeners to trigger recalculation of Le/D factors in the UI
+                sel.addEventListener('change', () => { renderFittings('suc'); renderFittings('dis'); });
             });
 
             const diaSelects = [document.getElementById('sucDiameter'), document.getElementById('disDiameter')];
@@ -482,13 +520,15 @@
                 for (const [name, val] of Object.entries(pipeDiameters)) {
                     sel.add(new Option(name + ` (${(val*1000).toFixed(1)} mm)`, val));
                 }
+                // Event listener to re-evaluate K dynamically when Diameter changes
+                sel.addEventListener('change', () => { renderFittings('suc'); renderFittings('dis'); });
             });
             
             document.getElementById('sucDiameter').value = pipeDiameters['4"'];
             document.getElementById('disDiameter').value = pipeDiameters['3"'];
 
-            addFittingToState('suc', "Entrada: Borde afilado/cuadrado", 0.5);
-            addFittingToState('dis', "Salida: De tubería a tanque", 1.0);
+            addFittingToState('suc', "Entrada: Borde afilado/cuadrado");
+            addFittingToState('dis', "Salida: De tubería a tanque");
             renderFittings('suc');
             renderFittings('dis');
         }
@@ -505,40 +545,84 @@
 
         function toggleSystemType() { /* Handled internally in physics */ }
 
-        function addFittingToState(line, name, k) {
-            fittingsLists[line].push({ id: fittingIdCounter++, name: name, k: k, qty: 1, isCustom: name === 'Personalizado' });
+        function addFittingToState(line, name) {
+            fittingsLists[line].push({ id: fittingIdCounter++, name: name, qty: 1, customK: 1.0 });
         }
-        function addFitting(line) { addFittingToState(line, "Codo 90° Estándar", fittingTypes["Codo 90° Estándar"]); renderFittings(line); }
-        function removeFitting(line, id) { fittingsLists[line] = fittingsLists[line].filter(f => f.id !== id); renderFittings(line); }
+        
+        function addFitting(line) { 
+            addFittingToState(line, "Codo 90° - Estándar (Roscado)"); 
+            renderFittings(line); 
+        }
+        
+        function removeFitting(line, id) { 
+            fittingsLists[line] = fittingsLists[line].filter(f => f.id !== id); 
+            renderFittings(line); 
+        }
+        
         function updateFitting(line, id, field, value) {
             const fitting = fittingsLists[line].find(f => f.id === id);
             if(fitting) {
                 if(field === 'type') {
-                    if(value === 'custom') { fitting.name = 'Personalizado'; fitting.isCustom = true; fitting.k = 1.0; } 
-                    else { fitting.name = value; fitting.isCustom = false; fitting.k = fittingTypes[value]; }
+                    fitting.name = value;
                 } 
-                else if(field === 'k') fitting.k = parseFloat(value) || 0;
+                else if(field === 'k') fitting.customK = parseFloat(value) || 0;
                 else if(field === 'qty') fitting.qty = parseInt(value) || 1;
                 renderFittings(line);
             }
         }
 
+        // --- CÁLCULO DINÁMICO DEL FACTOR ft Y DE K ---
+        function calcFt(epsilon, D) {
+            // fT = 0.25 / [log10( e / (3.7 * D) )]^2
+            const term = epsilon / (3.7 * D);
+            return 0.25 / Math.pow(Math.log10(term), 2);
+        }
+
+        function getFittingK(name, epsilon, D, customKValue) {
+            if (name === "Personalizado (Ingresar K)") return customKValue;
+            const data = fittingTypes[name];
+            if (!data) return 0;
+
+            if (data.type === 'K') return data.value;
+            if (data.type === 'LeD') {
+                const ft = calcFt(epsilon, D);
+                return ft * data.value;
+            }
+            return 0;
+        }
+
         function renderFittings(line) {
             const container = document.getElementById(`${line}FittingsContainer`);
             container.innerHTML = '';
-            if(fittingsLists[line].length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 italic">No hay accesorios definidos.</p>'; return; }
+            if(fittingsLists[line].length === 0) { 
+                container.innerHTML = '<p class="text-xs text-slate-400 italic">No hay accesorios definidos.</p>'; 
+                return; 
+            }
+
+            // Obtener variables actuales de la línea para calcular fT de inmediato y mostrarlo
+            const matSelect = document.getElementById(`${line}Material`);
+            const diaSelect = document.getElementById(`${line}Diameter`);
+            const epsilon = parseFloat(matSelect.value);
+            const D = parseFloat(diaSelect.value);
+
             fittingsLists[line].forEach(f => {
-                let selectHtml = `<select class="w-full text-xs p-1 border rounded" onchange="updateFitting('${line}', ${f.id}, 'type', this.value)">`;
-                for (const [name, kVal] of Object.entries(fittingTypes)) {
-                    let selected = (f.name === name) || (f.isCustom && kVal === 'custom') ? 'selected' : '';
-                    selectHtml += `<option value="${name === 'Personalizado' ? 'custom' : name}" ${selected}>${name}</option>`;
+                let selectHtml = `<select class="w-full text-xs p-1 border rounded bg-transparent" onchange="updateFitting('${line}', ${f.id}, 'type', this.value)">`;
+                for (const [name, data] of Object.entries(fittingTypes)) {
+                    let selected = (f.name === name) ? 'selected' : '';
+                    selectHtml += `<option value="${name}" ${selected}>${name}</option>`;
                 }
                 selectHtml += `</select>`;
-                let kInputHtml = f.isCustom 
-                    ? `<input type="number" step="0.1" value="${f.k}" class="w-16 text-xs p-1 border rounded" onchange="updateFitting('${line}', ${f.id}, 'k', this.value)" placeholder="K">`
-                    : `<span class="text-xs text-slate-500 font-mono w-16 inline-block text-right">K=${f.k}</span>`;
+                
+                // Calcular la K dinámicamente para la pantalla
+                let currentK = getFittingK(f.name, epsilon, D, f.customK);
+                let isDynamic = fittingTypes[f.name] && fittingTypes[f.name].type === 'LeD';
+                
+                let kInputHtml = f.name === "Personalizado (Ingresar K)"
+                    ? `<input type="number" step="0.1" value="${f.customK}" class="w-16 text-xs p-1 border rounded border-brand-300 bg-brand-50" onchange="updateFitting('${line}', ${f.id}, 'k', this.value)" placeholder="K">`
+                    : `<span class="text-xs ${isDynamic ? 'text-brand-600 font-bold' : 'text-slate-500'} font-mono w-16 inline-block text-right" title="${isDynamic ? 'K dinámico (Le/D * fT)' : 'K Fija'}">K=${currentK.toFixed(3)}</span>`;
+                
                 container.innerHTML += `
-                    <div class="flex items-center gap-2 bg-white p-1 rounded border shadow-sm">
+                    <div class="flex items-center gap-2 bg-white p-1 rounded border shadow-sm ${isDynamic ? 'border-brand-200 bg-brand-50/30' : ''}">
                         <div class="flex-grow">${selectHtml}</div>${kInputHtml}
                         <input type="number" min="1" value="${f.qty}" class="w-12 text-xs p-1 border rounded text-center" onchange="updateFitting('${line}', ${f.id}, 'qty', this.value)" title="Cantidad">
                         <button onclick="removeFitting('${line}', ${f.id})" class="text-red-500 hover:text-red-700 px-2"><i class="fa-solid fa-times"></i></button>
@@ -557,17 +641,25 @@
         }
 
         function calculateLine(Q_m3s, rho, mu, D, L, epsilon, fittings) {
-            if(Q_m3s <= 0) return { A: (Math.PI*D*D)/4, V: 0, Re: 0, f: 0, sumK: 0, velHead: 0, hl_primary: 0, hl_secondary: 0, hl_total: 0 };
+            if(Q_m3s <= 0) return { A: (Math.PI*D*D)/4, V: 0, Re: 0, f: 0, fT: 0, sumK: 0, velHead: 0, hl_primary: 0, hl_secondary: 0, hl_total: 0 };
+            
             const A = (Math.PI * Math.pow(D, 2)) / 4;
             const V = Q_m3s / A;
             const Re = (rho * V * D) / mu;
             const f = calcFrictionFactor(Re, epsilon, D);
+            const fT = calcFt(epsilon, D); // Calculamos factor totalmente turbulento de la línea
+            
             let sumK = 0;
-            fittings.forEach(fit => { sumK += (fit.k * fit.qty); });
+            fittings.forEach(fit => { 
+                const k_val = getFittingK(fit.name, epsilon, D, fit.customK);
+                sumK += (k_val * fit.qty); 
+            });
+            
             const velHead = Math.pow(V, 2) / (2 * g);
             const hl_primary = f * (L / D) * velHead;
             const hl_secondary = sumK * velHead;
-            return { A, V, Re, f, sumK, velHead, hl_primary, hl_secondary, hl_total: hl_primary + hl_secondary };
+            
+            return { A, V, Re, f, fT, sumK, velHead, hl_primary, hl_secondary, hl_total: hl_primary + hl_secondary };
         }
 
         // Función encapsulada para barrido de caudales en la gráfica
@@ -656,14 +748,16 @@
                 document.getElementById('out_v_suc').innerText = sucRes.V.toFixed(2);
                 document.getElementById('out_re_suc').innerText = sucRes.Re.toExponential(2);
                 document.getElementById('out_f_suc').innerText = sucRes.f.toFixed(4);
+                document.getElementById('out_ft_suc').innerText = sucRes.fT.toFixed(4); // Display fT
                 document.getElementById('out_hls').innerText = sucRes.hl_total.toFixed(2);
 
                 document.getElementById('out_v_dis').innerText = disRes.V.toFixed(2);
                 document.getElementById('out_re_dis').innerText = disRes.Re.toExponential(2);
                 document.getElementById('out_f_dis').innerText = disRes.f.toFixed(4);
+                document.getElementById('out_ft_dis').innerText = disRes.fT.toFixed(4); // Display fT
                 document.getElementById('out_hld').innerText = disRes.hl_total.toFixed(2);
 
-                // Render MathJax (AHORA INCLUYE EXPLICACIÓN DETALLADA DEL NPSHa)
+                // Render MathJax
                 const mathDiv = document.getElementById('mathEquation');
                 mathDiv.innerHTML = `
                     <div class="mb-3 text-emerald-400 font-bold border-b border-slate-700 pb-1">1. Carga Total del Sistema ($h_A$)</div>
@@ -674,7 +768,7 @@
                     $$NPSH_a = \\frac{P_{atm} + P_A - P_v}{\\gamma} + Z_A - h_{L_s}$$
                     $$NPSH_a = \\frac{${Patm} + ${Pa} - ${Pv}}{${gamma.toFixed(2)}} + ${Za} - ${sucRes.hl_total.toFixed(2)} = ${npsha.toFixed(2)} \\text{ m}$$
                 `;
-                MathJax.typesetPromise(); // Fuerza renderizado general en la página
+                MathJax.typesetPromise(); 
 
                 // Mostrar Paneles
                 document.getElementById('resultsPanel').classList.remove('hidden');
@@ -902,8 +996,6 @@
             const models = ["3196 (ANSI)", "Mark 3", "Etanorm", "AHLSTAR", "NKG"];
             
             for(let i=0; i<5; i++) {
-                // MODIFICACIÓN CLAVE: Generación determinista (pseudo-aleatoria) basada en el caudal (Q) y la Carga (H)
-                // Esto asegura que si los inputs no cambian, las bombas propuestas serán siempre exactamente las mismas.
                 let seed1 = Math.abs(Math.sin((Q_gpm * 0.1) + (i * 13.5))); 
                 let seed2 = Math.abs(Math.cos((H_m * 0.1) + (i * 7.2)));
 
