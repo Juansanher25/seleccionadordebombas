@@ -620,7 +620,9 @@
                 let selectHtml = `<select class="w-full text-xs p-1.5 border border-slate-300 rounded bg-transparent focus:ring-1 focus:ring-brand-500 outline-none" onchange="updateFitting('${line}', ${f.id}, 'type', this.value)">`;
                 for (const [name, data] of Object.entries(fittingTypes)) {
                     let selected = (f.name === name) ? 'selected' : '';
-                    selectHtml += `<option value="${name}" ${selected}>${name}</option>`;
+                    // REEMPLAZO CLAVE: Convertimos las comillas dobles en &quot; para no romper el atributo value
+                    let safeName = name.replace(/"/g, '&quot;');
+                    selectHtml += `<option value="${safeName}" ${selected}>${name}</option>`;
                 }
                 selectHtml += `</select>`;
                 
