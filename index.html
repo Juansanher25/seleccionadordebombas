@@ -197,7 +197,7 @@
                 <div class="grid grid-cols-3 gap-3 mb-4">
                     <div class="col-span-3 sm:col-span-1">
                         <label class="label-text">Material</label>
-                        <select id="sucMaterial" class="input-field"></select>
+                        <select id="sucMaterial" class="input-field text-xs sm:text-sm"></select>
                     </div>
                     <div class="col-span-3 sm:col-span-1">
                         <label class="label-text">Diámetro Nom.</label>
@@ -217,7 +217,7 @@
                             <i class="fa-solid fa-plus"></i> Añadir
                         </button>
                     </div>
-                    <div id="sucFittingsContainer" class="space-y-2 max-h-40 overflow-y-auto pr-2">
+                    <div id="sucFittingsContainer" class="space-y-2 max-h-56 overflow-y-auto pr-2">
                         <!-- Dynamic fittings go here -->
                     </div>
                 </div>
@@ -232,7 +232,7 @@
                 <div class="grid grid-cols-3 gap-3 mb-4">
                     <div class="col-span-3 sm:col-span-1">
                         <label class="label-text">Material</label>
-                        <select id="disMaterial" class="input-field"></select>
+                        <select id="disMaterial" class="input-field text-xs sm:text-sm"></select>
                     </div>
                     <div class="col-span-3 sm:col-span-1">
                         <label class="label-text">Diámetro Nom.</label>
@@ -252,7 +252,7 @@
                             <i class="fa-solid fa-plus"></i> Añadir
                         </button>
                     </div>
-                    <div id="disFittingsContainer" class="space-y-2 max-h-40 overflow-y-auto pr-2">
+                    <div id="disFittingsContainer" class="space-y-2 max-h-56 overflow-y-auto pr-2">
                         <!-- Dynamic fittings go here -->
                     </div>
                 </div>
@@ -441,12 +441,13 @@
     <!-- SCRIPT DE LÓGICA DE INGENIERÍA Y UI -->
     <script>
         // --- BASE DE DATOS INTERNA: MATERIALES (Rugosidad ε en metros) ---
+        // Se ajustaron los valores de acuerdo a las tolerancias comunes y requerimientos
         const pipeMaterials = {
-            "Acero Comercial (Ced 40/80)": 0.000045,
-            "Acero Inoxidable": 0.000015,
-            "Hierro Fundido (Nuevo)": 0.00026,
-            "Hierro Fundido (Viejo)": 0.001,
-            "Cobre o Latón (Tubo)": 0.0000015,
+            "Acero Comercial": 0.000046, // Ajustado a 4.6x10^-5
+            "Acero Inox.": 0.0000015,    // 1.5x10^-6
+            "Hierro Fund. Nuevo": 0.00026,
+            "Hierro Fund. Viejo": 0.001,
+            "Cobre/Latón": 0.0000015,
             "PVC / Plástico": 0.0000015,
             "Concreto (Liso)": 0.0003
         };
@@ -459,8 +460,6 @@
         };
 
         // --- BASE DE DATOS INTERNA: ACCESORIOS (Valores Le/D y K puros) ---
-        // 'LeD' significa que el valor proporcionado es Le/D y se multiplicará por el fT
-        // 'K' significa que es el coeficiente de pérdida directo
         const fittingTypes = {
             // Válvulas de Compuerta
             "Válv. Compuerta - Abierta por completo": { type: 'LeD', value: 8 },
@@ -508,10 +507,21 @@
         let sysCurveChartObj = null;
         let lastInputsCache = null; // Caching del estado de los inputs
 
+        // Helper para formatear rugosidad (ej: 0.000046 -> 4,6X10^-5)
+        function formatRoughness(val) {
+            if (val === 0) return "0 m";
+            let parts = val.toExponential(1).split('e');
+            let num = parts[0].replace('.', ',');
+            let exp = parseInt(parts[1], 10);
+            return `${num}X10^${exp}`;
+        }
+
         function initApp() {
             const matSelects = [document.getElementById('sucMaterial'), document.getElementById('disMaterial')];
             matSelects.forEach(sel => {
-                for (const [name, value] of Object.entries(pipeMaterials)) sel.add(new Option(name, value));
+                for (const [name, value] of Object.entries(pipeMaterials)) {
+                    sel.add(new Option(`${name} (${formatRoughness(value)} m)`, value));
+                }
                 // Add event listeners to trigger recalculation of Le/D factors in the UI
                 sel.addEventListener('change', () => { renderFittings('suc'); renderFittings('dis'); });
             });
@@ -607,7 +617,7 @@
             const D = parseFloat(diaSelect.value);
 
             fittingsLists[line].forEach(f => {
-                let selectHtml = `<select class="w-full text-xs p-1 border rounded bg-transparent" onchange="updateFitting('${line}', ${f.id}, 'type', this.value)">`;
+                let selectHtml = `<select class="w-full text-xs p-1.5 border border-slate-300 rounded bg-transparent focus:ring-1 focus:ring-brand-500 outline-none" onchange="updateFitting('${line}', ${f.id}, 'type', this.value)">`;
                 for (const [name, data] of Object.entries(fittingTypes)) {
                     let selected = (f.name === name) ? 'selected' : '';
                     selectHtml += `<option value="${name}" ${selected}>${name}</option>`;
@@ -619,14 +629,23 @@
                 let isDynamic = fittingTypes[f.name] && fittingTypes[f.name].type === 'LeD';
                 
                 let kInputHtml = f.name === "Personalizado (Ingresar K)"
-                    ? `<input type="number" step="0.1" value="${f.customK}" class="w-16 text-xs p-1 border rounded border-brand-300 bg-brand-50" onchange="updateFitting('${line}', ${f.id}, 'k', this.value)" placeholder="K">`
-                    : `<span class="text-xs ${isDynamic ? 'text-brand-600 font-bold' : 'text-slate-500'} font-mono w-16 inline-block text-right" title="${isDynamic ? 'K dinámico (Le/D * fT)' : 'K Fija'}">K=${currentK.toFixed(3)}</span>`;
+                    ? `<input type="number" step="0.1" value="${f.customK}" class="w-16 text-xs p-1.5 border rounded border-brand-300 bg-brand-50" onchange="updateFitting('${line}', ${f.id}, 'k', this.value)" placeholder="K">`
+                    : `<span class="text-xs ${isDynamic ? 'text-brand-600 font-bold' : 'text-slate-500'} font-mono min-w-[50px] inline-block text-right" title="${isDynamic ? 'K dinámico (Le/D * fT)' : 'K Fija'}">K=${currentK.toFixed(2)}</span>`;
                 
+                // Diseño Modificado: flex-wrap y ajustes de anchos (w-full sm:w-auto) para arreglar problema visual en celulares
                 container.innerHTML += `
-                    <div class="flex items-center gap-2 bg-white p-1 rounded border shadow-sm ${isDynamic ? 'border-brand-200 bg-brand-50/30' : ''}">
-                        <div class="flex-grow">${selectHtml}</div>${kInputHtml}
-                        <input type="number" min="1" value="${f.qty}" class="w-12 text-xs p-1 border rounded text-center" onchange="updateFitting('${line}', ${f.id}, 'qty', this.value)" title="Cantidad">
-                        <button onclick="removeFitting('${line}', ${f.id})" class="text-red-500 hover:text-red-700 px-2"><i class="fa-solid fa-times"></i></button>
+                    <div class="flex flex-wrap items-center gap-2 bg-white p-2 rounded border shadow-sm mb-2 ${isDynamic ? 'border-brand-200 bg-brand-50/40' : 'border-slate-200'}">
+                        <div class="w-full sm:flex-grow sm:w-auto min-w-[140px]">${selectHtml}</div>
+                        <div class="flex items-center gap-3 ml-auto shrink-0">
+                            ${kInputHtml}
+                            <div class="flex items-center border border-slate-300 rounded overflow-hidden shadow-inner">
+                                <span class="bg-slate-100 text-[10px] px-2 py-1.5 text-slate-500 font-bold border-r border-slate-300 hidden sm:inline-block">CANT.</span>
+                                <input type="number" min="1" value="${f.qty}" class="w-12 text-xs p-1.5 text-center bg-white outline-none focus:bg-brand-50" onchange="updateFitting('${line}', ${f.id}, 'qty', this.value)" title="Cantidad">
+                            </div>
+                            <button onclick="removeFitting('${line}', ${f.id})" class="text-red-500 bg-red-50 hover:bg-red-500 hover:text-white border border-transparent hover:border-red-600 rounded px-3 py-1.5 transition-colors shrink-0 flex items-center justify-center shadow-sm" title="Quitar accesorio">
+                                <i class="fa-solid fa-times"></i>
+                            </button>
+                        </div>
                     </div>`;
             });
         }
